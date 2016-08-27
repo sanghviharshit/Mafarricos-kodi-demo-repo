@@ -14,9 +14,6 @@ class MySettings():
 
     self.mode                  = int(__addon__.getSetting("mode"))
     self.light                 = int(__addon__.getSetting("light"))
-    #self.light1_id             = int(__addon__.getSetting("light1_id"))
-    #self.light2_id             = int(__addon__.getSetting("light2_id"))
-    #self.light3_id             = int(__addon__.getSetting("light3_id"))
     self.group_id              = __addon__.getSetting("group_id")
     self.misc_initialflash     = __addon__.getSetting("misc_initialflash") == "true"
     self.misc_disableshort     = __addon__.getSetting("misc_disableshort") == "true"
@@ -35,18 +32,21 @@ class MySettings():
     self.override_sat          = __addon__.getSetting("override_sat") == "true"
     self.dimmed_sat            = int(__addon__.getSetting("dimmed_sat").split(".")[0])
     self.undim_sat             = int(__addon__.getSetting("undim_sat").split(".")[0])
+
+    self.override_kel = __addon__.getSetting("override_kel") == "true"
+    self.dimmed_kel = int(__addon__.getSetting("dimmed_kel").split(".")[0])
+    self.undim_kel = int(__addon__.getSetting("undim_kel").split(".")[0])
+
     self.undim_during_credits  = __addon__.getSetting("undim_during_credits") == "true"
     self.credits_delay_time    = int(__addon__.getSetting("credits_delay_time").split(".")[0])
     self.ambilight_dim         = __addon__.getSetting("ambilight_dim") == "true"
     self.ambilight_dim_light   = int(__addon__.getSetting("ambilight_dim_light"))
-    #self.ambilight_dim_light1_id = int(__addon__.getSetting("ambilight_dim_light1_id"))
-    #self.ambilight_dim_light2_id = int(__addon__.getSetting("ambilight_dim_light2_id"))
-    #self.ambilight_dim_light3_id = int(__addon__.getSetting("ambilight_dim_light3_id"))
     self.ambilight_dim_group_id = __addon__.getSetting("ambilight_dim_group_id")
     self.ambilight_min         = int(int(__addon__.getSetting("ambilight_min").split(".")[0])*254/100)
     self.ambilight_max         = int(int(__addon__.getSetting("ambilight_max").split(".")[0])*254/100)
     self.ambilight_threshold_value = int(int(__addon__.getSetting("ambilight_threshold_value").split(".")[0])*254/100)
     self.ambilight_threshold_saturation = int(int(__addon__.getSetting("ambilight_threshold_saturation").split(".")[0])*254/100)
+    self.color_variation = int(__addon__.getSetting("color_variation"))
     self.color_bias            = int(int(__addon__.getSetting("color_bias").split(".")[0])/3*3)
     self.force_light_on        = __addon__.getSetting("force_light_on") == "true"
     self.force_light_group_start_override = __addon__.getSetting("force_light_group_start_override") == "true"
