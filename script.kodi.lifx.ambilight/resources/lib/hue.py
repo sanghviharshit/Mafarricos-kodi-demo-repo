@@ -68,13 +68,15 @@ class Hue:
         self.params = {}
 
   def test_connection(self):
-    self.logger.debuglog("testing connection")
-    print("Discovering lights...")
+    self.logger.debuglog("Testing Connection")
+    #self.logger.debuglog("Discovering lights...")
     bulbs = lifx.get_lights()
     if len(bulbs) > 0:
+      self.logger.debuglog("Found {0} Lifx Bulbs".format(str(len(bulbs))))
       notify("Kodi Lifx", "Found {0} Lifx Bulbs".format(str(len(bulbs))))
       self.connected = True
     else:
+      self.logger.debuglog("No Lifx bulbs found")
       notify("Kodi Lifx", "No Lifx bulbs found")
       self.connected = False
     return self.connected
@@ -137,7 +139,7 @@ class Hue:
           l.partial_light()
       
   def update_settings(self):
-    self.logger.debuglog("class Hue: update settings")
+    self.logger.debuglog("Class Hue: update settings")
     self.logger.debuglog(self.settings)
     if self.settings.light == 0:
       self.logger.debuglog("creating Group instance")
@@ -241,6 +243,8 @@ class Light:
     self.fullSpectrum = True
     self.livingwhite = False
 
+    self.multiplier = 100
+
     self.logger.debuglog("light %s start settings: %s" % (self.light.get_label(), self.start_setting))
 
   def set_light2(self, hue, sat, bri, kel, power=None, duration=None):
@@ -271,7 +275,7 @@ class Light:
         data["sat"] = self.start_setting["sat"]
         self.satLast = self.start_setting["sat"]
 
-    self.logger.debuglog("light %s: onLast: %s, briLast: %s" % (self.light.get_label(), self.onLast, self.briLast))
+    #self.logger.debuglog("light %s: onLast: %s, briLast: %s" % (self.light.get_label(), self.onLast, self.briLast))
 
     if self.onLast == False:  # don't send on unless we have to (performance)
       data["on"] = True
@@ -292,17 +296,19 @@ class Light:
     elif hue > 0 or sat > 0:
       data["kel"] = 3500  # Set kelvin to neutral
       # self.logger.debuglog("Light: %s: kel=neutral - 3500" % (self.light.get_label()))
-      self.kelLast = data["kel"]
+    elif sat == 0:
+      data["kel"] = 5500  # Set kelvin to White Daylight if saturation is 0
     elif not self.kelLast is None:
       data["kel"] = self.kelLast
     else:
       data["kel"] = self.start_setting["kel"]
-      self.kelLast = data["kel"]
+    
+    self.kelLast = data["kel"]
 
     time = 0
     if duration is None:
       if self.proportional_dim_time and self.mode != 0: #only if its not ambilight mode too
-        self.logger.debuglog("last %r, next %r, start %r, finish %r" % (self.briLast, bri, self.start_setting['bri'], self.dimmed_bri))
+        #self.logger.debuglog("last %r, next %r, start %r, finish %r" % (self.briLast, bri, self.start_setting['bri'], self.dimmed_bri))
         difference = abs(float(bri) - self.briLast)
         total = float(self.start_setting['bri']) - self.dimmed_bri
         if total != 0:
@@ -320,7 +326,7 @@ class Light:
     
     dataString = json.dumps(data)
 
-    self.logger.debuglog("set_light2: %s: %s" % (self.light.get_label(), dataString))
+    #self.logger.debuglog("set_light2: %s: %s" % (self.light.get_label(), dataString))
     
 
     if data["on"]:
@@ -330,11 +336,13 @@ class Light:
       self.light.set_power(False, rapid=False)
 
     # color is a list of HSBK values: [hue (0-65535), saturation (0-65535), brightness (0-65535), Kelvin (2500-9000)]
-    color = [int(data["hue"]),int(data["sat"]*65535/255),int(data["bri"]*65535/255),int(data["kel"])]
-    #self.logger.debuglog("set_light2: %s: %s" % (self.light.get_label(), color))
+    # 65535/255 = 257
+    color = [int(data["hue"]),int(data["sat"]*257),int(data["bri"]*257),int(data["kel"])]
+    #color_log = [int(data["hue"]*360/65535),int(data["sat"]*100/255),int(data["bri"]*100/255),int(data["kel"])]
+    #self.logger.debuglog("set_light2: %s: %s  (%s ms)" % (self.light.get_label(), color_log, data["transitiontime"]*self.multiplier))
 
     # Lifxlan duration is in miliseconds
-    self.light.set_color(color, data["transitiontime"]*100, rapid=False)
+    self.light.set_color(color, data["transitiontime"]*self.multiplier, rapid=False)
     #self.request_url_put("http://%s/api/%s/lights/%s/state" % \
     #  (self.bridge_ip, self.bridge_user, self.light), data=dataString)
 
@@ -551,20 +559,20 @@ class Group(Light):
 
     dataString = json.dumps(data)
 
-    self.logger.debuglog("set_light2: %s: %s" % (self.group_id, dataString))
     #self.logger.debuglog("Group: %s: number of bulbs - %s" % (self.group_id, len(self.lights)))
 
+    # color is a list of HSBK values: [hue (0-65535), saturation (0-65535), brightness (0-65535), Kelvin (2500-9000)]
+    color = [int(data["hue"]), int(data["sat"]*257), int(data["bri"]*257), int(data["kel"])]
+    #color_log = [int(data["hue"]*360/65535),int(data["sat"]*100/255),int(data["bri"]*100/255),int(data["kel"])]
+    #self.logger.debuglog("set_light2: %s: %s  (%s ms)" % (self.group_id, color_log, data["transitiontime"]*self.multiplier))
     for group_light in self.lights:
       # Lifxlan duration is in miliseconds
       #self.lights[group_light].set_power("on", data["transitiontime"]*100, rapid=False)
       if data["on"]:
         group_light.set_power(True, rapid=False)
 
-      # color is a list of HSBK values: [hue (0-65535), saturation (0-65535), brightness (0-65535), Kelvin (2500-9000)]
-      color = [int(data["hue"]), int(data["sat"]*65535/255), int(data["bri"]*65535/255), int(data["kel"])]
       # Lifxlan duration is in miliseconds
-      #self.lights[group_light].set_color(color, data["transitiontime"]*100, rapid=False)
-      group_light.set_color(color, data["transitiontime"] * 100, rapid=False)
+      group_light.set_color(color, data["transitiontime"]*self.multiplier, rapid=False)
 
   def dim_light(self):
     for light in self.lights:
@@ -616,5 +624,8 @@ class Group(Light):
     #modelid = j['modelid']
     self.fullSpectrum = True
     self.livingwhite = False
+    
+    # Used for transition duration
+    self.multiplier = 100
 
     self.logger.debuglog("Group %s start settings: %s" % (self.group_id, self.start_setting))

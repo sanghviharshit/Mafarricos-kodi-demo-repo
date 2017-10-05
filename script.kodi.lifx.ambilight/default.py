@@ -62,7 +62,7 @@ class MyMonitor( xbmc.Monitor ):
 
   def onSettingsChanged( self ):
     logger.debuglog("running in mode %s" % str(hue.settings.mode))
-    last = datetime.now()
+    #last = datetime.now()
     hue.settings.readxml()
     hue.update_settings()
 
@@ -199,10 +199,8 @@ class Screenshot:
 
   def most_used_spectrum(self, spectrum, saturation, value, size, overall_value):
     # color bias/groups 6 - 36 in steps of 3
-    colorGroups = settings.color_bias
-    if colorGroups == 0:
-      colorGroups = 1
-    colorHueRatio = 360 / colorGroups
+    colorGroups = settings.color_bias #6 = more variety of colors, 36 = similar colors
+    colorHueRatio = 360 / colorGroups #colorHueRatio will be between 60 and 10. 60=close to primary colors, 10 = more to original colors
 
     hsvRatios = []
     hsvRatiosDict = {}
@@ -210,6 +208,16 @@ class Screenshot:
     for i in spectrum:
       #shift index to the right so that groups are centered on primary and secondary colors
       colorIndex = int(((i+colorHueRatio/2) % 360)/colorHueRatio)
+      #some info? - https://docs.gimp.org/en/gimp-tool-hue-saturation.html
+      #i=0, ratio=60 => colorIndex = 0            
+      #i=60, ratio=60 => colorIndex = int(1.5)
+      #i=90, ratio=60 => colorIndex = int(2)
+      #i=120, ratio=60 => colorIndex = int(2.5)
+      #i=180, ratio=60 => colorIndex = int(3.5)
+      #i=270, ratio=60 => colorIndex = int(4.5)
+      #i=330, ratio=60 => colorIndex = int(5.5)
+      #i=360, ratio=60 => colorIndex = int(0.5)
+
       pixelCount = spectrum[i]
 
       try:
@@ -222,11 +230,16 @@ class Screenshot:
         hsvRatios.append(hsvr)
 
     colorCount = len(hsvRatios)
+    logger.debuglog("Count of colors - %s" % colorCount)
+
     if colorCount > 1:
       # sort colors by popularity
       hsvRatios = sorted(hsvRatios, key=lambda hsvratio: hsvratio.ratio, reverse=True)
-      # logger.debuglog("hsvRatios %s" % hsvRatios)
+      
+      for hsvRatio in hsvRatios:
+        hsvRatio.averageValue(overall_value)
 
+      '''  
       #return at least 3
       if colorCount == 2:
         hsvRatios.insert(0, hsvRatios[0])
@@ -234,14 +247,15 @@ class Screenshot:
       hsvRatios[0].averageValue(overall_value)
       hsvRatios[1].averageValue(overall_value)
       hsvRatios[2].averageValue(overall_value)
+      '''
       return hsvRatios
 
     elif colorCount == 1:
       hsvRatios[0].averageValue(overall_value)
-      return [hsvRatios[0]] * 3
+      return [hsvRatios[0]]
 
     else:
-      return [HSVRatio()] * 3
+      return [HSVRatio()]
 
   def spectrum_hsv(self, pixels, width, height):
     spectrum = {}
@@ -265,12 +279,17 @@ class Screenshot:
           h = int(tmph * 360)
           try:
               spectrum[h] += 1
-              saturation[h] = (saturation[h] + tmps)/2
-              value[h] = (value[h] + tmpv)/2
+              saturation[h] = saturation[h] + tmps
+              value[h] = value[h] + tmpv
           except KeyError:
               spectrum[h] = 1
               saturation[h] = tmps
               value[h] = tmpv
+
+      # Averaging saturation and value for each hue key in spectrum
+      for i in spectrum:
+        saturation[i] = saturation[i]/spectrum[i]
+        value[h] = value[h]/spectrum[i]
 
     overall_value = 1
     if int(i) != 0:
@@ -296,17 +315,14 @@ def run():
   last = time()
 
   #logger.debuglog("starting run loop!")
-  while not monitor.abortRequested():
+  while not monitor.abortRequested() and not xbmc.abortRequested:
 
-    waitTimeout = 1;
+    #sleep(100)
+    waitTimeout = 1; #seconds
 
     if hue.settings.mode == 0: # ambilight mode
-      waitTimeout = 0.1;
-      now = time()
-      #logger.debuglog("run loop delta: %f (%f/sec)" % ((now-last), 1/(now-last)))
-      #logger.debuglog("player.playingvideo: %s %s, useLegacyApi: %s" % (player.playingvideo, player.isPlayingVideo(), useLegacyApi))
-      last = now
-
+      waitTimeout = 0.01; #seconds
+      
       startReadOut = False
       vals = {}
 
@@ -317,27 +333,34 @@ def run():
       #  state_changed("started", player.getTotalTime())
       #  continue
       if player.playingvideo: # only if there's actually video
+        now = time()
+        #logger.debuglog("run loop delta: %f (%f/sec)" % ((now-last), 1/(now-last)))
+        #logger.debuglog("player.playingvideo: %s %s, useLegacyApi: %s" % (player.playingvideo, player.isPlayingVideo(), useLegacyApi))
+        last = now
         try:
           if useLegacyApi:
             #logger.debuglog("Waiting for capture state changed")
-            capture.waitForCaptureStateChangeEvent(int(1000/60)) #milliseconds
+            capture.waitForCaptureStateChangeEvent(1000)
             #we've got a capture event
             #logger.debuglog("Capture State = %s" % (capture.getCaptureState()))
             if capture.getCaptureState() == xbmc.CAPTURE_STATE_DONE:
-              #logger.debuglog("Capture state = Done")
               startReadOut = True
           else:
-            vals = capture.getImage(int(1000/60)) #
-            if len(vals) > 0:
+            pixels = capture.getImage(1000)
+            if len(pixels) > 0:
               startReadOut = True
+
           if startReadOut:
             if useLegacyApi:
-              vals = capture.getImage()
-              screen = Screenshot(vals, capture.getWidth(), capture.getHeight())
-            else:
-              screen = Screenshot(capture.getImage(), capture.getWidth(), capture.getHeight())
+              pixels = capture.getImage(1000)
+
+            width = capture.getWidth();
+            height = capture.getHeight();
+
+            screen = Screenshot(pixels, width, height)
             hsvRatios = screen.spectrum_hsv(screen.pixels, screen.capture_width, screen.capture_height)
-            #logger.debuglog("hsvRatios: %s" %(hsvRatios))
+            logger.debuglog("hsvRatios: %s" %(hsvRatios))
+
             if hue.settings.light == 0:
               if settings.color_variation == 0:
                 fade_light_hsv(hue.light, hsvRatios[0])
@@ -361,22 +384,23 @@ def run():
     if monitor.waitForAbort(waitTimeout):
       #kodi requested an abort, lets get out of here.
       break
-      
   del player #might help with slow exit.
   #del monitor
 
 def fade_light_hsv(light, hsvRatio):
   fullSpectrum = light.fullSpectrum
   h, s, v = hsvRatio.hue(fullSpectrum)
-  hvec = abs(h - light.hueLast) % int(255/2)
+  hvec = abs(h - light.hueLast) % int(65535/2)
   hvec = float(hvec/128.0)
   svec = s - light.satLast
   vvec = v - light.briLast
   distance = math.sqrt(hvec**2 + svec**2 + vvec**2) #changed to squares for performance
   if distance > 0:
-    duration = int(3 + 27 * distance/255) #old algorithm
-    #duration = int(10 - 2.5 * distance/255) #todo - check if this is better ?
-    # logger.debuglog("distance %s duration %s" % (distance, duration))
+    if hue.settings.ambilight_old_algorithm:
+      duration = int(3 + 27 * distance/255)
+    else:
+      duration = int(10 - 2.5 * distance/255)
+    #logger.debuglog("distance %s duration %s" % (distance, duration))
     light.set_light2(h, s, v, kel=None, power=None, duration=duration)
 
 credits_time = None #test = 10
@@ -492,14 +516,17 @@ if ( __name__ == "__main__" ):
     capture.getCaptureState()
   except AttributeError:
     useLegacyApi = False
+
   settings = MySettings()
   logger = Logger()
   monitor = MyMonitor()
+
   if settings.debug == True:
     logger.debug()
 
   logger.debuglog("useLegacyApi - %s" % str(useLegacyApi))
-    
+  logger.debuglog("Settings - %s" % str(settings))
+
   args = None
   if len(sys.argv) == 2:
     args = sys.argv[1]
