@@ -14,7 +14,7 @@
 	</extension>
 </addon>
 
-    <addon id="script.kodi.lifx.ambilight" version="1.0.5"
+    <addon id="script.kodi.lifx.ambilight" version="1.0.6"
       name="Lifx Ambilight" provider-name="Harshit Sanghvi">
     <requires>
         <import addon="xbmc.python" version="2.25.0"/>
